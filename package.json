@@ -8,23 +8,26 @@
   "files": [
     "dist/**/*",
     "bin/**/*",
+    "src/**/*",
+    "tsconfig.json",
     "package.json",
     "README.md",
     "LICENSE"
   ],
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^22.15.2",
-    "typescript": "^5.8.3"
+    "@types/node": "^22.15.2"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",
     "openai": "^4.96.0",
-    "zod": "^3.25.63"
+    "zod": "^3.25.63",
+    "typescript": "^5.8.3"
   },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "postinstall": "npm run build"
   }
 }
