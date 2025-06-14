@@ -188,7 +188,7 @@ if (envFileArgIndex !== -1 && cmdArgs[envFileArgIndex + 1]) {
           const baseUrl = process.env.BASE_URL;
           if (baseUrl) {
             const fileName = path.basename(filePath);
-            const httpUrl = `${baseUrl.replace(/\/$/, '')}/images/${fileName}`;
+            const httpUrl = `${baseUrl.replace(/\/$/, '')}/files/${fileName}`;
             responses.push({ type: "text", text: `Image available at: ${httpUrl}` });
           } else {
             responses.push({ type: "text", text: `Image saved to: file://${filePath}` });
@@ -379,7 +379,7 @@ if (envFileArgIndex !== -1 && cmdArgs[envFileArgIndex + 1]) {
           const baseUrl = process.env.BASE_URL;
           if (baseUrl) {
             const fileName = path.basename(filePath);
-            const httpUrl = `${baseUrl.replace(/\/$/, '')}/images/${fileName}`;
+            const httpUrl = `${baseUrl.replace(/\/$/, '')}/files/${fileName}`;
             responses.push({ type: "text", text: `Image available at: ${httpUrl}` });
           } else {
             responses.push({ type: "text", text: `Image saved to: file://${filePath}` });
