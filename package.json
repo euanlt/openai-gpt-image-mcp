@@ -25,9 +25,9 @@
     "typescript": "^5.8.3"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "echo '[BUILD] Compiling TypeScript...' && tsc && echo '[BUILD] Compilation complete!'",
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build",
-    "postinstall": "npm run build"
+    "postinstall": "echo '[POSTINSTALL] Building MCP...' && npm run build && echo '[POSTINSTALL] Ready!'"
   }
 }

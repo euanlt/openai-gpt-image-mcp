@@ -39,12 +39,32 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 // Suppress all Node.js warnings (including deprecation)
 process.emitWarning = () => { };
+console.log(`[${new Date().toISOString()}] Loading dependencies...`);
+const startTime = performance.now();
+console.log(`[DEPS] Loading MCP SDK...`);
+const mcpStart = performance.now();
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
+const mcpEnd = performance.now();
+console.log(`[DEPS] MCP SDK loaded (${(mcpEnd - mcpStart).toFixed(0)}ms)`);
+console.log(`[DEPS] Loading Zod...`);
+const zodStart = performance.now();
 const zod_1 = require("zod");
+const zodEnd = performance.now();
+console.log(`[DEPS] Zod loaded (${(zodEnd - zodStart).toFixed(0)}ms)`);
+console.log(`[DEPS] Loading OpenAI SDK...`);
+const openaiStart = performance.now();
 const openai_1 = require("openai");
+const openaiEnd = performance.now();
+console.log(`[DEPS] OpenAI SDK loaded (${(openaiEnd - openaiStart).toFixed(0)}ms)`);
+console.log(`[DEPS] Loading Node.js modules...`);
+const nodeStart = performance.now();
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const nodeEnd = performance.now();
+console.log(`[DEPS] Node.js modules loaded (${(nodeEnd - nodeStart).toFixed(0)}ms)`);
+const totalTime = performance.now() - startTime;
+console.log(`[DEPS] All dependencies loaded (${totalTime.toFixed(0)}ms total)`);
 // Function to load environment variables from a file
 const loadEnvFile = (filePath) => {
     try {
@@ -68,18 +88,17 @@ const loadEnvFile = (filePath) => {
         console.warn(`Warning: Could not read environment file at ${filePath}:`, error);
     }
 };
+console.log(`[${new Date().toISOString()}] Starting OpenAI GPT Image MCP...`);
 // Parse command line arguments for --env-file
 const cmdArgs = process.argv.slice(2);
 const envFileArgIndex = cmdArgs.findIndex(arg => arg === "--env-file");
 if (envFileArgIndex !== -1 && cmdArgs[envFileArgIndex + 1]) {
-    console.log("Loading environment variables from file:", cmdArgs[envFileArgIndex + 1]);
+    console.log(`[${new Date().toISOString()}] Loading environment file...`);
     const envFilePath = cmdArgs[envFileArgIndex + 1];
     loadEnvFile(envFilePath);
 }
-else {
-    console.log("No environment file provided");
-}
 (async () => {
+    console.log(`[${new Date().toISOString()}] Initializing MCP server...`);
     const server = new mcp_js_1.McpServer({
         name: "openai-gpt-image-mcp",
         version: "1.0.0"
@@ -125,6 +144,7 @@ else {
             return true;
         return false;
     }, { message: "file_output must be an absolute path when output is 'file_output'", path: ["file_output"] });
+    console.log(`[${new Date().toISOString()}] Registering create-image tool...`);
     // Use ._def.schema.shape to get the raw shape for server.tool due to Zod refinements
     server.tool("create-image", createImageSchema._def.schema.shape, async (args, _extra) => {
         // If AZURE_OPENAI_API_KEY is defined, use the AzureOpenAI class
@@ -230,12 +250,13 @@ else {
         return false;
     };
     const base64Check = (val) => !!val && (/^([A-Za-z0-9+/=\r\n]+)$/.test(val) || val.startsWith("data:image/"));
-    const imageInputSchema = zod_1.z.string().refine((val) => absolutePathCheck(val) || base64Check(val), { message: "Must be an absolute path or a base64-encoded string (optionally as a data URL)" }).describe("Absolute path to an image file (png, jpg, webp < 25MB) or a base64-encoded image string.");
+    const httpUrlCheck = (val) => !!val && (val.startsWith('http://') || val.startsWith('https://'));
+    const imageInputSchema = zod_1.z.string().refine((val) => absolutePathCheck(val) || base64Check(val) || httpUrlCheck(val), { message: "Must be an absolute path, HTTP URL, or a base64-encoded string (optionally as a data URL)" }).describe("Absolute path to an image file (png, jpg, webp < 25MB), HTTP URL, or a base64-encoded image string.");
     // Base schema without refinement for server.tool signature
     const editImageBaseSchema = zod_1.z.object({
-        image: zod_1.z.string().describe("Absolute image path or base64 string to edit."),
+        image: zod_1.z.string().describe("Absolute image path, HTTP URL, or base64 string to edit."),
         prompt: zod_1.z.string().max(32000).describe("A text description of the desired edit. Max 32000 chars."),
-        mask: zod_1.z.string().optional().describe("Optional absolute path or base64 string for a mask image (png < 4MB, same dimensions as the first image). Fully transparent areas indicate where to edit."),
+        mask: zod_1.z.string().optional().describe("Optional absolute path, HTTP URL, or base64 string for a mask image (png < 4MB, same dimensions as the first image). Fully transparent areas indicate where to edit."),
         model: zod_1.z.literal("gpt-image-1").default("gpt-image-1"),
         n: zod_1.z.number().int().min(1).max(10).optional().describe("Number of images to generate (1-10)."),
         quality: zod_1.z.enum(["auto", "high", "medium", "low"]).optional().describe("Quality (high, medium, low) - only for gpt-image-1."),
@@ -253,24 +274,52 @@ else {
             return false;
         return absolutePathCheck(data.file_output);
     }, { message: "file_output must be an absolute path when output is 'file_output'", path: ["file_output"] });
+    console.log(`[${new Date().toISOString()}] Registering edit-image tool...`);
     // Edit Image Tool (gpt-image-1 only)
     server.tool("edit-image", editImageBaseSchema.shape, // <-- Use the base schema shape here
     async (args, _extra) => {
         // Validate arguments using the full schema with refinements
         const validatedArgs = editImageSchema.parse(args);
         // Explicitly validate image and mask inputs here
-        if (!absolutePathCheck(validatedArgs.image) && !base64Check(validatedArgs.image)) {
-            throw new Error("Invalid 'image' input: Must be an absolute path or a base64-encoded string.");
+        if (!absolutePathCheck(validatedArgs.image) && !base64Check(validatedArgs.image) && !httpUrlCheck(validatedArgs.image)) {
+            throw new Error("Invalid 'image' input: Must be an absolute path, HTTP URL, or a base64-encoded string.");
         }
-        if (validatedArgs.mask && !absolutePathCheck(validatedArgs.mask) && !base64Check(validatedArgs.mask)) {
-            throw new Error("Invalid 'mask' input: Must be an absolute path or a base64-encoded string.");
+        if (validatedArgs.mask && !absolutePathCheck(validatedArgs.mask) && !base64Check(validatedArgs.mask) && !httpUrlCheck(validatedArgs.mask)) {
+            throw new Error("Invalid 'mask' input: Must be an absolute path, HTTP URL, or a base64-encoded string.");
         }
         const openai = process.env.AZURE_OPENAI_API_KEY ? new openai_1.AzureOpenAI() : new openai_1.OpenAI();
         const { image: imageInput, prompt, mask: maskInput, model = "gpt-image-1", n, quality, size, user, output = "base64", file_output: file_outputRaw, } = validatedArgs; // <-- Use validatedArgs here
         const file_output = file_outputRaw;
-        // Helper to convert input (path or base64) to toFile
+        // Helper to detect HTTP URLs
+        function isHttpUrl(input) {
+            return input.startsWith('http://') || input.startsWith('https://');
+        }
+        // Helper to fetch image from HTTP URL
+        async function fetchImageFromUrl(url) {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch image from ${url}: ${response.status} ${response.statusText}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+        }
+        // Helper to convert input (path, base64, or HTTP URL) to toFile
         async function inputToFile(input, idx = 0) {
-            if (absolutePathCheck(input)) {
+            if (isHttpUrl(input)) {
+                // HTTP URL: fetch the image data
+                const imageBuffer = await fetchImageFromUrl(input);
+                const ext = input.split('.').pop()?.toLowerCase() || 'png';
+                let mime = "image/png";
+                if (ext === "jpg" || ext === "jpeg")
+                    mime = "image/jpeg";
+                else if (ext === "webp")
+                    mime = "image/webp";
+                else if (ext === "png")
+                    mime = "image/png";
+                // else default to png
+                return await (0, openai_1.toFile)(imageBuffer, `downloaded_${idx}.${ext}`, { type: mime });
+            }
+            else if (absolutePathCheck(input)) {
                 // File path: infer mime type from extension
                 const ext = input.split('.').pop()?.toLowerCase();
                 let mime = "image/png";
@@ -385,6 +434,10 @@ else {
             };
         }
     });
+    console.log(`[${new Date().toISOString()}] edit-image tool registered successfully`);
+    console.log(`[${new Date().toISOString()}] Creating StdioServerTransport...`);
     const transport = new stdio_js_1.StdioServerTransport();
+    console.log(`[${new Date().toISOString()}] Connecting to transport...`);
     await server.connect(transport);
+    console.log(`[${new Date().toISOString()}] ✅ OpenAI GPT Image MCP fully initialized and ready!`);
 })();
