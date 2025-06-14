@@ -193,7 +193,16 @@ else {
                     filePath = path.join(parsed.dir, `${parsed.name}.${img.ext ?? "png"}`);
                 }
                 await fs.writeFile(filePath, Buffer.from(img.b64, "base64"));
-                responses.push({ type: "text", text: `Image saved to: file://${filePath}` });
+                // Return HTTP URL if BASE_URL is set, otherwise use file:// protocol
+                const baseUrl = process.env.BASE_URL;
+                if (baseUrl) {
+                    const fileName = path.basename(filePath);
+                    const httpUrl = `${baseUrl.replace(/\/$/, '')}/images/${fileName}`;
+                    responses.push({ type: "text", text: `Image available at: ${httpUrl}` });
+                }
+                else {
+                    responses.push({ type: "text", text: `Image saved to: file://${filePath}` });
+                }
             }
             return { content: responses };
         }
@@ -352,8 +361,16 @@ else {
                     filePath = path_1.default.join(parsed.dir, `${parsed.name}${ext}`);
                 }
                 await fs_1.default.promises.writeFile(filePath, Buffer.from(img.b64, "base64"));
-                // Workaround: Return file path as text
-                responses.push({ type: "text", text: `Image saved to: file://${filePath}` });
+                // Return HTTP URL if BASE_URL is set, otherwise use file:// protocol
+                const baseUrl = process.env.BASE_URL;
+                if (baseUrl) {
+                    const fileName = path_1.default.basename(filePath);
+                    const httpUrl = `${baseUrl.replace(/\/$/, '')}/images/${fileName}`;
+                    responses.push({ type: "text", text: `Image available at: ${httpUrl}` });
+                }
+                else {
+                    responses.push({ type: "text", text: `Image saved to: file://${filePath}` });
+                }
             }
             return { content: responses };
         }
